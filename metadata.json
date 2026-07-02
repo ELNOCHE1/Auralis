@@ -1,0 +1,6 @@
+{
+  "name": "Auralis",
+  "description": "Auralis es un reproductor de música elegante con recomendaciones, ecualizador, letras de canciones, gestión de playlists y estadísticas de reproducción.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

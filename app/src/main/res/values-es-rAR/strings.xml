@@ -1,0 +1,38 @@
+<resources>
+    <string name="app_name">Auralis</string>
+    <string name="nav_home">Inicio</string>
+    <string name="nav_search">Buscar</string>
+    <string name="nav_playlists">Playlists</string>
+    <string name="nav_profile">Perfil</string>
+    <string name="nav_equalizer">Ecualizador</string>
+
+    <string name="title_trends">Tendencias</string>
+    <string name="title_recommended">Recomendados para vos</string>
+    <string name="search_placeholder">Buscá canciones, artistas o álbumes...</string>
+    <string name="empty_playlists">No tenés playlists creadas. ¡Creá una nueva!</string>
+    <string name="create_playlist_dialog_title">Creá una nueva playlist</string>
+    <string name="playlist_name_placeholder">Nombre de tu playlist</string>
+    <string name="btn_create">Crear</string>
+    <string name="btn_cancel">Cancelar</string>
+    <string name="stats_title">Tus Estadísticas de Escucha</string>
+    <string name="stats_songs_played">Canciones escuchadas</string>
+    <string name="stats_minutes">Minutos reproducidos</string>
+    <string name="stats_top_genre">Tu género favorito</string>
+    
+    <string name="equalizer_title">Ecualizador</string>
+    <string name="equalizer_bass">Graves</string>
+    <string name="equalizer_treble">Agudos</string>
+    <string name="lyrics_title">Letras</string>
+    <string name="lyrics_empty">No hay letras para esta canción, agregá la tuya.</string>
+    
+    <string name="player_notification_title">Sonando ahora</string>
+    <string name="player_notification_desc">Auralis está sonando de fondo.</string>
+    
+    <string name="msg_added_favorites">Agregado a tus favoritos</string>
+    <string name="msg_removed_favorites">Eliminado de tus favoritos</string>
+    <string name="msg_playlist_created">Playlist creada correctamente</string>
+    <string name="msg_added_playlist">Agregado a tu playlist</string>
+    
+    <string name="theme_mode_dark">Modo Oscuro</string>
+    <string name="theme_mode_light">Modo Claro</string>
+</resources>
