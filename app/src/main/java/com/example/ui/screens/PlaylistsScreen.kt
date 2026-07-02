@@ -250,6 +250,36 @@ fun PlaylistCard(
                 )
             }
 
+            val context = androidx.compose.ui.platform.LocalContext.current
+            IconButton(
+                onClick = {
+                    val songListText = playlistWithSongs.songs.mapIndexed { index, song ->
+                        "${index + 1}. ${song.title} - ${song.artist}"
+                    }.joinToString("\n")
+                    
+                    val shareText = "🎶 ¡Mira mi playlist en Auralis! 🎶\n" +
+                            "Nombre: ${playlistWithSongs.playlist.name}\n" +
+                            "Canciones (${playlistWithSongs.songs.size}):\n" +
+                            (if (songListText.isEmpty()) "[Sin canciones aún]" else songListText) +
+                            "\n\n¡Creado con Auralis!"
+                    
+                    val shareIntent = android.content.Intent().apply {
+                        action = android.content.Intent.ACTION_SEND
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_SUBJECT, "Playlist compartida: ${playlistWithSongs.playlist.name}")
+                        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir Playlist"))
+                },
+                modifier = Modifier.testTag("share_playlist_${playlistWithSongs.playlist.id}")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "Compartir playlist",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                )
+            }
+
             IconButton(
                 onClick = onDeleteClick,
                 modifier = Modifier.testTag("delete_playlist_${playlistWithSongs.playlist.id}")
@@ -271,6 +301,7 @@ fun PlaylistSongsDialog(
     onSongPlay: (SongEntity) -> Unit,
     onRemoveSong: (String) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(24.dp),
@@ -301,6 +332,35 @@ fun PlaylistSongsDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    IconButton(
+                        onClick = {
+                            val songListText = playlistWithSongs.songs.mapIndexed { index, song ->
+                                "${index + 1}. ${song.title} - ${song.artist}"
+                            }.joinToString("\n")
+                            
+                            val shareText = "🎶 ¡Mira mi playlist en Auralis! 🎶\n" +
+                                    "Nombre: ${playlistWithSongs.playlist.name}\n" +
+                                    "Canciones (${playlistWithSongs.songs.size}):\n" +
+                                    (if (songListText.isEmpty()) "[Sin canciones aún]" else songListText) +
+                                    "\n\n¡Creado con Auralis!"
+                            
+                            val shareIntent = android.content.Intent().apply {
+                                action = android.content.Intent.ACTION_SEND
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "Playlist compartida: ${playlistWithSongs.playlist.name}")
+                                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir Playlist"))
+                        },
+                        modifier = Modifier.testTag("dialog_share_playlist_${playlistWithSongs.playlist.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Compartir",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
                     IconButton(onClick = onDismiss) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar")
                     }
@@ -358,6 +418,26 @@ fun PlaylistSongsDialog(
                                         maxLines = 1
                                     )
                                 }
+                                IconButton(
+                                    onClick = {
+                                        val shareIntent = android.content.Intent().apply {
+                                            action = android.content.Intent.ACTION_SEND
+                                            type = "text/plain"
+                                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Compartiendo canción en Auralis")
+                                            putExtra(android.content.Intent.EXTRA_TEXT, "🎵 ¡Escuchá esta canción en Auralis! 🎵\nTítulo: ${song.title}\nArtista: ${song.artist}\nÁlbum: ${song.album}")
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir canción"))
+                                    },
+                                    modifier = Modifier.testTag("share_song_from_dialog_${song.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Share,
+                                        contentDescription = "Compartir canción",
+                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
                                 IconButton(
                                     onClick = { onRemoveSong(song.id) },
                                     modifier = Modifier.testTag("remove_song_${song.id}_from_playlist")

@@ -478,6 +478,30 @@ fun FullPlayerScreen(
                             modifier = Modifier.size(28.dp)
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Share Button
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    IconButton(
+                        onClick = {
+                            val shareIntent = android.content.Intent().apply {
+                                action = android.content.Intent.ACTION_SEND
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "Compartiendo canción en Auralis")
+                                putExtra(android.content.Intent.EXTRA_TEXT, "🎵 ¡Escuchá esta canción en Auralis! 🎵\nTítulo: ${song.title}\nArtista: ${song.artist}\nÁlbum: ${song.album}\n¡Disfrutá la música local!")
+                            }
+                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir canción"))
+                        },
+                        modifier = Modifier.testTag("player_share_song_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Compartir",
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
 

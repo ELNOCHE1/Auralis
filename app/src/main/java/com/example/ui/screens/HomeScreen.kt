@@ -18,7 +18,14 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,6 +64,50 @@ fun HomeScreen(
         "¡Hola! ¿Qué escuchamos hoy?"
     }
 
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            
+            val retriever = MediaMetadataRetriever()
+            var title = "Canción Local"
+            var artist = "Artista Desconocido"
+            var duration = 180
+            try {
+                retriever.setDataSource(context, it)
+                title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: "Canción Local"
+                artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: "Artista Desconocido"
+                val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                if (durationStr != null) {
+                    duration = durationStr.toInt() / 1000
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                val cursor = context.contentResolver.query(it, null, null, null, null)
+                cursor?.use { c ->
+                    if (c.moveToFirst()) {
+                        val displayNameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (displayNameIdx != -1) {
+                            val filename = c.getString(displayNameIdx)
+                            title = filename?.substringBeforeLast(".") ?: "Canción Local"
+                        }
+                    }
+                }
+            } finally {
+                try { retriever.release() } catch (e: Exception) {}
+            }
+            viewModel.importLocalSong(it.toString(), title, artist, duration)
+        }
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -70,15 +121,46 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
-                // Greeting text above the banner
-                Text(
-                    text = greeting,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    ),
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
+                // Greeting and Import Button in a Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = greeting,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    Button(
+                        onClick = { launcher.launch(arrayOf("audio/*")) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.testTag("import_local_audio_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Cargar Audio",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Importar",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
 
                 // Header with "Descubrí algo nuevo" and "Ver todo"
                 Row(

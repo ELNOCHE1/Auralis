@@ -22,6 +22,7 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
 
     private val repository: MusicRepository
     private var playbackJob: Job? = null
+    private var mediaPlayer: android.media.MediaPlayer? = null
 
     // Theme override state
     private val _isDarkTheme = MutableStateFlow<Boolean?>(null) // null = system, true = dark, false = light
@@ -35,6 +36,7 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         repository = MusicRepository(database.musicDao())
 
         viewModelScope.launch {
+            repository.clearMockSongs()
             repository.seedDatabaseIfEmpty()
         }
     }
@@ -135,7 +137,23 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    private fun releaseMediaPlayer() {
+        try {
+            mediaPlayer?.apply {
+                if (isPlaying) {
+                    stop()
+                }
+                release()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            mediaPlayer = null
+        }
+    }
+
     fun selectSong(song: SongEntity) {
+        releaseMediaPlayer()
         _currentSong.value = song
         _playbackProgress.value = 0
         _isPlaying.value = true
@@ -145,6 +163,26 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             repository.recordPlayback(song.id, 5) // Record 5 seconds listening unit initially
         }
+
+        if (song.audioUrl != null) {
+            try {
+                mediaPlayer = android.media.MediaPlayer().apply {
+                    setDataSource(getApplication<Application>(), android.net.Uri.parse(song.audioUrl))
+                    prepare()
+                    start()
+                    setOnCompletionListener {
+                        nextSong()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                viewModelScope.launch {
+                    _toastMessage.emit("Error al reproducir el archivo local: ${e.localizedMessage}")
+                }
+                releaseMediaPlayer()
+            }
+        }
+        
         startTimer()
     }
 
@@ -155,9 +193,35 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         
         if (nextPlaying) {
             _notificationMessage.value = "Reanudado: ${song.title}"
+            if (song.audioUrl != null && mediaPlayer == null) {
+                try {
+                    mediaPlayer = android.media.MediaPlayer().apply {
+                        setDataSource(getApplication<Application>(), android.net.Uri.parse(song.audioUrl))
+                        prepare()
+                        seekTo(_playbackProgress.value * 1000)
+                        start()
+                        setOnCompletionListener {
+                            nextSong()
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            } else {
+                try {
+                    mediaPlayer?.start()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
             startTimer()
         } else {
             _notificationMessage.value = "Pausado: ${song.title}"
+            try {
+                mediaPlayer?.pause()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
             stopTimer()
         }
     }
@@ -190,7 +254,13 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
 
     fun seekTo(seconds: Int) {
         val current = _currentSong.value ?: return
-        _playbackProgress.value = seconds.coerceIn(0, current.durationSeconds)
+        val targetSeconds = seconds.coerceIn(0, current.durationSeconds)
+        _playbackProgress.value = targetSeconds
+        try {
+            mediaPlayer?.seekTo(targetSeconds * 1000)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun toggleFavorite(song: SongEntity) {
@@ -274,17 +344,28 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     private fun startTimer() {
         playbackJob?.cancel()
         playbackJob = viewModelScope.launch {
+            val song = _currentSong.value ?: return@launch
+            val isReal = song.audioUrl != null && mediaPlayer != null
             while (_isPlaying.value) {
                 delay(1000)
                 val current = _currentSong.value ?: break
-                val progress = _playbackProgress.value
-                if (progress >= current.durationSeconds) {
-                    // Record completed play
-                    repository.recordPlayback(current.id, 10) // additional stats weights
-                    nextSong()
-                    break
+                if (isReal) {
+                    val pos = try {
+                        (mediaPlayer?.currentPosition ?: 0) / 1000
+                    } catch (e: Exception) {
+                        _playbackProgress.value
+                    }
+                    _playbackProgress.value = pos.coerceIn(0, current.durationSeconds)
                 } else {
-                    _playbackProgress.value = progress + 1
+                    val progress = _playbackProgress.value
+                    if (progress >= current.durationSeconds) {
+                        // Record completed play
+                        repository.recordPlayback(current.id, 10) // additional stats weights
+                        nextSong()
+                        break
+                    } else {
+                        _playbackProgress.value = progress + 1
+                    }
                 }
             }
         }
@@ -295,8 +376,30 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         playbackJob = null
     }
 
+    fun importLocalSong(uriString: String, title: String, artist: String, duration: Int) {
+        viewModelScope.launch {
+            val localSong = SongEntity(
+                id = uriString,
+                title = title,
+                artist = artist,
+                album = "Archivo Local",
+                durationSeconds = duration,
+                artworkUrl = "local_imported",
+                lyrics = "[Canción local - Sin letra disponible]",
+                genre = "Local",
+                isTrending = false,
+                isRecommended = true,
+                isFavorite = false,
+                audioUrl = uriString
+            )
+            repository.addSong(localSong)
+            _toastMessage.emit("Canción importada con éxito: $title")
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopTimer()
+        releaseMediaPlayer()
     }
 }

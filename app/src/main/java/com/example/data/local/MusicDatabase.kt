@@ -18,7 +18,8 @@ data class SongEntity(
     val genre: String,
     val isTrending: Boolean = false,
     val isRecommended: Boolean = false,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val audioUrl: String? = null
 )
 
 @Entity(tableName = "playlists")
@@ -105,6 +106,9 @@ interface MusicDao {
     @Query("SELECT COUNT(*) FROM songs")
     suspend fun getSongsCount(): Int
 
+    @Query("DELETE FROM songs WHERE audioUrl IS NULL")
+    suspend fun deleteNonLocalSongs()
+
     // Playlist queries
     @Query("SELECT * FROM playlists ORDER BY createdAt DESC")
     fun getAllPlaylists(): Flow<List<PlaylistEntity>>
@@ -173,7 +177,7 @@ interface MusicDao {
         PlaylistSongCrossRef::class,
         ListeningStatEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
