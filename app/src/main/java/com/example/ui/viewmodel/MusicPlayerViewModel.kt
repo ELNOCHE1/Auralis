@@ -91,6 +91,10 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     private val _notificationMessage = MutableStateFlow<String?>(null)
     val notificationMessage: StateFlow<String?> = _notificationMessage.asStateFlow()
 
+    // Toast event stream
+    private val _toastMessage = MutableSharedFlow<String>()
+    val toastMessage: SharedFlow<String> = _toastMessage.asSharedFlow()
+
     // Listener statistics
     val userStats: StateFlow<UserStats> = repository.allListeningStats
         .combine(songs) { stats, allSongs ->
@@ -191,7 +195,15 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
 
     fun toggleFavorite(song: SongEntity) {
         viewModelScope.launch {
+            val willBeFavorite = !song.isFavorite
             repository.toggleFavorite(song.id, song.isFavorite)
+            val msg = if (willBeFavorite) {
+                "Añadido a favoritos: ${song.title}"
+            } else {
+                "Eliminado de favoritos: ${song.title}"
+            }
+            _toastMessage.emit(msg)
+            _notificationMessage.value = msg
         }
     }
 
@@ -208,24 +220,49 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     fun createPlaylist(name: String) {
         viewModelScope.launch {
             repository.createPlaylist(name)
+            val msg = "Playlist creada: $name"
+            _toastMessage.emit(msg)
+            _notificationMessage.value = msg
         }
     }
 
     fun deletePlaylist(playlistId: Int) {
         viewModelScope.launch {
+            val playlist = playlists.value.find { it.id == playlistId }
             repository.deletePlaylist(playlistId)
+            val msg = if (playlist != null) "Playlist eliminada: ${playlist.name}" else "Playlist eliminada"
+            _toastMessage.emit(msg)
+            _notificationMessage.value = msg
         }
     }
 
     fun addSongToPlaylist(playlistId: Int, songId: String) {
         viewModelScope.launch {
             repository.addSongToPlaylist(playlistId, songId)
+            val playlist = playlists.value.find { it.id == playlistId }
+            val song = songs.value.find { it.id == songId }
+            val msg = if (playlist != null && song != null) {
+                "Añadido '${song.title}' a la playlist '${playlist.name}'"
+            } else {
+                "Canción añadida a la playlist"
+            }
+            _toastMessage.emit(msg)
+            _notificationMessage.value = msg
         }
     }
 
     fun removeSongFromPlaylist(playlistId: Int, songId: String) {
         viewModelScope.launch {
             repository.removeSongFromPlaylist(playlistId, songId)
+            val playlist = playlists.value.find { it.id == playlistId }
+            val song = songs.value.find { it.id == songId }
+            val msg = if (playlist != null && song != null) {
+                "Eliminado '${song.title}' de la playlist '${playlist.name}'"
+            } else {
+                "Canción eliminada de la playlist"
+            }
+            _toastMessage.emit(msg)
+            _notificationMessage.value = msg
         }
     }
 
