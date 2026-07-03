@@ -1,6 +1,6 @@
 {
-  "name": "Auralis",
-  "description": "Auralis es un reproductor de música elegante con recomendaciones, ecualizador, letras de canciones, gestión de playlists y estadísticas de reproducción.",
+  "name": "Auralis Connect",
+  "description": "Auralis Connect es un reproductor de música elegante con funciones sociales, recomendaciones, ecualizador, racha de escucha, letras de canciones y gestión de playlists.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

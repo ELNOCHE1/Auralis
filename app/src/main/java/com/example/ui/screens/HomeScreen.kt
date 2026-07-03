@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -26,9 +28,7 @@ import android.content.Intent
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,6 +64,16 @@ fun HomeScreen(
         "¡Hola! ¿Qué escuchamos hoy?"
     }
 
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importUri by remember { mutableStateOf<Uri?>(null) }
+    var importTitle by remember { mutableStateOf("") }
+    var importArtist by remember { mutableStateOf("") }
+    var importAlbum by remember { mutableStateOf("") }
+    var importGenre by remember { mutableStateOf("") }
+    var importLyrics by remember { mutableStateOf("") }
+    var importArtworkUrl by remember { mutableStateOf("bg_retro") }
+    var importDuration by remember { mutableStateOf(180) }
+
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -80,11 +90,15 @@ fun HomeScreen(
             val retriever = MediaMetadataRetriever()
             var title = "Canción Local"
             var artist = "Artista Desconocido"
+            var album = "Archivo Local"
+            var genre = "Local"
             var duration = 180
             try {
                 retriever.setDataSource(context, it)
                 title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: "Canción Local"
                 artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: "Artista Desconocido"
+                album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: "Archivo Local"
+                genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE) ?: "Local"
                 val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                 if (durationStr != null) {
                     duration = durationStr.toInt() / 1000
@@ -104,14 +118,64 @@ fun HomeScreen(
             } finally {
                 try { retriever.release() } catch (e: Exception) {}
             }
-            viewModel.importLocalSong(it.toString(), title, artist, duration)
+
+            // Set states to trigger the Edit / Import dialog
+            importUri = it
+            importTitle = title
+            importArtist = artist
+            importAlbum = album
+            importGenre = genre
+            importDuration = duration
+            importArtworkUrl = when (genre.lowercase()) {
+                "retro", "synthwave" -> "bg_synthwave"
+                "acoustic", "folk", "acoustic guitar" -> "bg_acoustic"
+                "lofi", "chill" -> "bg_lofi"
+                "rock", "metal" -> "bg_rock"
+                "space", "ambient" -> "bg_space"
+                else -> "bg_retro"
+            }
+            
+            importLyrics = """
+                🎵 [Intro Instrumental]
+                
+                [Estrofa 1]
+                Escuchando esta melodía de $artist...
+                El viento sopla en silencio,
+                mientras suena la canción en mi rincón.
+                $title es el pulso de este momento.
+                
+                [Coro]
+                Oh, $title nos hace soñar,
+                deja que el ritmo te lleve hoy.
+                Bajo las estrellas vamos a cantar,
+                con Auralis, directo al corazón.
+                
+                [Estrofa 2]
+                El camino se llena de color,
+                la música borra la oscuridad.
+                $artist le pone todo el alma y valor,
+                viviendo cada nota con libertad.
+                
+                [Coro]
+                Oh, $title nos hace soñar,
+                deja que el ritmo te lleve hoy.
+                Bajo las estrellas vamos a cantar,
+                con Auralis, directo al corazón.
+                
+                [Outro]
+                Sigue sonando... $title...
+                Conectando almas en Auralis Connect.
+                🎵 [Fin de la canción]
+            """.trimIndent()
+            
+            showImportDialog = true
         }
     }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(Color.Transparent),
         contentPadding = PaddingValues(bottom = 120.dp) // extra padding so player doesn't hide contents
     ) {
         // Hero Header Section
@@ -303,6 +367,138 @@ fun HomeScreen(
                 isCurrent = song.id == currentSong?.id
             )
         }
+    }
+
+    if (showImportDialog && importUri != null) {
+        AlertDialog(
+            onDismissRequest = { showImportDialog = false },
+            title = {
+                Text(
+                    text = "Detalles de Canción Local",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Verifica y edita la información de tu archivo de música local antes de guardarlo en tu biblioteca de Auralis.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = importTitle,
+                        onValueChange = { importTitle = it },
+                        label = { Text("Título de la canción") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("import_title_field")
+                    )
+
+                    OutlinedTextField(
+                        value = importArtist,
+                        onValueChange = { importArtist = it },
+                        label = { Text("Autor / Artista") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("import_artist_field")
+                    )
+
+                    OutlinedTextField(
+                        value = importAlbum,
+                        onValueChange = { importAlbum = it },
+                        label = { Text("Álbum") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("import_album_field")
+                    )
+
+                    OutlinedTextField(
+                        value = importGenre,
+                        onValueChange = { importGenre = it },
+                        label = { Text("Género") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("import_genre_field")
+                    )
+
+                    Text(
+                        text = "Estilo de Arte Visual:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    val artworkOptions = listOf(
+                        "bg_retro" to "Retro Pink",
+                        "bg_synthwave" to "Synthwave",
+                        "bg_acoustic" to "Acoustic",
+                        "bg_lofi" to "Lofi",
+                        "bg_rock" to "Rock",
+                        "bg_space" to "Space"
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        artworkOptions.forEach { (key, name) ->
+                            val isSelected = importArtworkUrl == key
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(getArtGradient(key))
+                                    .border(
+                                        width = if (isSelected) 3.dp else 1.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.4f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { importArtworkUrl = key }
+                                    .testTag("import_art_option_$key")
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = importLyrics,
+                        onValueChange = { importLyrics = it },
+                        label = { Text("Letra de la canción") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .testTag("import_lyrics_field"),
+                        maxLines = 15
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.importLocalSong(
+                            uriString = importUri.toString(),
+                            title = importTitle,
+                            artist = importArtist,
+                            album = importAlbum,
+                            genre = importGenre,
+                            artworkUrl = importArtworkUrl,
+                            lyrics = importLyrics,
+                            duration = importDuration
+                        )
+                        showImportDialog = false
+                    },
+                    modifier = Modifier.testTag("confirm_import_btn")
+                ) {
+                    Text("Importar canción", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 

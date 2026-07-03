@@ -43,7 +43,7 @@ fun PlaylistsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color.Transparent)
     ) {
         if (playlistsWithSongs.isEmpty()) {
             // Empty State
@@ -118,6 +118,7 @@ fun PlaylistsScreen(
                     items(playlistsWithSongs) { playlistWithSongs ->
                         PlaylistCard(
                             playlistWithSongs = playlistWithSongs,
+                            viewModel = viewModel,
                             onClick = { selectedPlaylistForDetail = playlistWithSongs },
                             onDeleteClick = { viewModel.deletePlaylist(playlistWithSongs.playlist.id) }
                         )
@@ -174,6 +175,7 @@ fun PlaylistsScreen(
             } else {
                 PlaylistSongsDialog(
                     playlistWithSongs = dynamicDetail,
+                    viewModel = viewModel,
                     onDismiss = { selectedPlaylistForDetail = null },
                     onSongPlay = { song ->
                         onSongSelect(song)
@@ -191,6 +193,7 @@ fun PlaylistsScreen(
 @Composable
 fun PlaylistCard(
     playlistWithSongs: PlaylistWithSongs,
+    viewModel: MusicPlayerViewModel,
     onClick: () -> Unit,
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -253,23 +256,35 @@ fun PlaylistCard(
             val context = androidx.compose.ui.platform.LocalContext.current
             IconButton(
                 onClick = {
-                    val songListText = playlistWithSongs.songs.mapIndexed { index, song ->
-                        "${index + 1}. ${song.title} - ${song.artist}"
-                    }.joinToString("\n")
-                    
-                    val shareText = "🎶 ¡Mira mi playlist en Auralis! 🎶\n" +
-                            "Nombre: ${playlistWithSongs.playlist.name}\n" +
-                            "Canciones (${playlistWithSongs.songs.size}):\n" +
-                            (if (songListText.isEmpty()) "[Sin canciones aún]" else songListText) +
-                            "\n\n¡Creado con Auralis!"
-                    
-                    val shareIntent = android.content.Intent().apply {
-                        action = android.content.Intent.ACTION_SEND
-                        type = "text/plain"
-                        putExtra(android.content.Intent.EXTRA_SUBJECT, "Playlist compartida: ${playlistWithSongs.playlist.name}")
-                        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                    val performShare = {
+                        val songListText = playlistWithSongs.songs.mapIndexed { index, song ->
+                            "${index + 1}. ${song.title} - ${song.artist}"
+                        }.joinToString("\n")
+                        
+                        val shareText = "🎶 ¡Mira mi playlist en Auralis Connect! 🎶\n" +
+                                "Nombre: ${playlistWithSongs.playlist.name}\n" +
+                                "Compartida por: ${viewModel.userCustomName.value}\n" +
+                                "Canciones (${playlistWithSongs.songs.size}):\n" +
+                                (if (songListText.isEmpty()) "[Sin canciones aún]" else songListText) +
+                                "\n\n¡Creado con Auralis Connect!"
+                        
+                        viewModel.recordShare()
+                        val shareIntent = android.content.Intent().apply {
+                            action = android.content.Intent.ACTION_SEND
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Playlist compartida: ${playlistWithSongs.playlist.name}")
+                            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir Playlist"))
                     }
-                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir Playlist"))
+
+                    if (viewModel.isLoggedIn.value) {
+                        performShare()
+                    } else {
+                        viewModel.showLoginRequired {
+                            performShare()
+                        }
+                    }
                 },
                 modifier = Modifier.testTag("share_playlist_${playlistWithSongs.playlist.id}")
             ) {
@@ -297,6 +312,7 @@ fun PlaylistCard(
 @Composable
 fun PlaylistSongsDialog(
     playlistWithSongs: PlaylistWithSongs,
+    viewModel: MusicPlayerViewModel,
     onDismiss: () -> Unit,
     onSongPlay: (SongEntity) -> Unit,
     onRemoveSong: (String) -> Unit
@@ -334,23 +350,35 @@ fun PlaylistSongsDialog(
                     }
                     IconButton(
                         onClick = {
-                            val songListText = playlistWithSongs.songs.mapIndexed { index, song ->
-                                "${index + 1}. ${song.title} - ${song.artist}"
-                            }.joinToString("\n")
-                            
-                            val shareText = "🎶 ¡Mira mi playlist en Auralis! 🎶\n" +
-                                    "Nombre: ${playlistWithSongs.playlist.name}\n" +
-                                    "Canciones (${playlistWithSongs.songs.size}):\n" +
-                                    (if (songListText.isEmpty()) "[Sin canciones aún]" else songListText) +
-                                    "\n\n¡Creado con Auralis!"
-                            
-                            val shareIntent = android.content.Intent().apply {
-                                action = android.content.Intent.ACTION_SEND
-                                type = "text/plain"
-                                putExtra(android.content.Intent.EXTRA_SUBJECT, "Playlist compartida: ${playlistWithSongs.playlist.name}")
-                                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                            val performShare = {
+                                val songListText = playlistWithSongs.songs.mapIndexed { index, song ->
+                                    "${index + 1}. ${song.title} - ${song.artist}"
+                                }.joinToString("\n")
+                                
+                                val shareText = "🎶 ¡Mira mi playlist en Auralis Connect! 🎶\n" +
+                                        "Nombre: ${playlistWithSongs.playlist.name}\n" +
+                                        "Compartida por: ${viewModel.userCustomName.value}\n" +
+                                        "Canciones (${playlistWithSongs.songs.size}):\n" +
+                                        (if (songListText.isEmpty()) "[Sin canciones aún]" else songListText) +
+                                        "\n\n¡Creado con Auralis Connect!"
+                                
+                                viewModel.recordShare()
+                                val shareIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Playlist compartida: ${playlistWithSongs.playlist.name}")
+                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                }
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir Playlist"))
                             }
-                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir Playlist"))
+
+                            if (viewModel.isLoggedIn.value) {
+                                performShare()
+                            } else {
+                                viewModel.showLoginRequired {
+                                    performShare()
+                                }
+                            }
                         },
                         modifier = Modifier.testTag("dialog_share_playlist_${playlistWithSongs.playlist.id}")
                     ) {
@@ -423,10 +451,23 @@ fun PlaylistSongsDialog(
                                         val shareIntent = android.content.Intent().apply {
                                             action = android.content.Intent.ACTION_SEND
                                             type = "text/plain"
-                                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Compartiendo canción en Auralis")
-                                            putExtra(android.content.Intent.EXTRA_TEXT, "🎵 ¡Escuchá esta canción en Auralis! 🎵\nTítulo: ${song.title}\nArtista: ${song.artist}\nÁlbum: ${song.album}")
+                                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Compartiendo canción en Auralis Connect")
+                                            val authorName = viewModel.userCustomName.value
+                                            putExtra(android.content.Intent.EXTRA_TEXT, "🎵 ¡Escucha esta canción compartida por $authorName en Auralis Connect! 🎵\nTítulo: ${song.title}\nArtista: ${song.artist}\nÁlbum: ${song.album}")
                                         }
-                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir canción"))
+                                        
+                                        val performShare = {
+                                            viewModel.recordShare()
+                                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir canción"))
+                                        }
+                                        
+                                        if (viewModel.isLoggedIn.value) {
+                                            performShare()
+                                        } else {
+                                            viewModel.showLoginRequired {
+                                                performShare()
+                                            }
+                                        }
                                     },
                                     modifier = Modifier.testTag("share_song_from_dialog_${song.id}")
                                 ) {

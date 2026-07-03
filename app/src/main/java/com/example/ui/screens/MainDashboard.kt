@@ -29,7 +29,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.R
 import com.example.data.local.SongEntity
+import com.example.ui.components.AnimatedBackground
+import com.example.ui.components.LoginDialog
 import com.example.ui.viewmodel.MusicPlayerViewModel
+import androidx.compose.foundation.isSystemInDarkTheme
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,8 +67,28 @@ fun MainDashboard(
         }
     }
 
-    Scaffold(
-        topBar = {
+    val isPlayingState by viewModel.isPlaying.collectAsState()
+    val isDarkThemeState = viewModel.isDarkTheme.collectAsState().value ?: isSystemInDarkTheme()
+    val showLoginRequiredDialog by viewModel.showLoginRequiredDialog.collectAsState()
+
+    Box(modifier = modifier.fillMaxSize()) {
+        AnimatedBackground(
+            isPlaying = isPlayingState,
+            isDarkTheme = isDarkThemeState,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        LoginDialog(
+            showDialog = showLoginRequiredDialog,
+            onDismiss = { viewModel.dismissLoginRequired() },
+            onLoginSuccess = { name, emailOrPhone, method ->
+                viewModel.login(name, emailOrPhone, method)
+            }
+        )
+
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
             TopAppBar(
                 title = {
                     Row(
@@ -103,7 +126,7 @@ fun MainDashboard(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = Color.Transparent,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
@@ -296,4 +319,5 @@ fun MainDashboard(
             }
         }
     }
+}
 }

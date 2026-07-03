@@ -178,6 +178,7 @@ fun PlayerOverlay(
                 enter = slideInVertically(initialOffsetY = { it }),
                 exit = slideOutVertically(targetOffsetY = { it })
             ) {
+                val context = androidx.compose.ui.platform.LocalContext.current
                 FullPlayerScreen(
                     song = song,
                     isPlaying = isPlaying,
@@ -188,7 +189,29 @@ fun PlayerOverlay(
                     onPrev = { viewModel.prevSong() },
                     onSeek = { viewModel.seekTo(it) },
                     onFavoriteToggle = { viewModel.toggleFavorite(song) },
-                    onAddToPlaylistClick = { showAddToPlaylistDialog = true }
+                    onAddToPlaylistClick = { showAddToPlaylistDialog = true },
+                    onShareClick = {
+                        val performShare = {
+                            viewModel.recordShare()
+                            val shareIntent = android.content.Intent().apply {
+                                action = android.content.Intent.ACTION_SEND
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "Compartiendo canción en Auralis Connect")
+                                val authorName = viewModel.userCustomName.value
+                                putExtra(android.content.Intent.EXTRA_TEXT, "🎵 ¡Escucha esta canción compartida por $authorName en Auralis Connect! 🎵\nTítulo: ${song.title}\nArtista: ${song.artist}\nÁlbum: ${song.album}")
+                            }
+                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir canción"))
+                        }
+
+                        if (viewModel.isLoggedIn.value) {
+                            performShare()
+                        } else {
+                            viewModel.showLoginRequired {
+                                performShare()
+                            }
+                        }
+                    },
+                    onLyricsClick = { viewModel.recordLyricsViewed() }
                 )
             }
 
@@ -279,7 +302,9 @@ fun FullPlayerScreen(
     onPrev: () -> Unit,
     onSeek: (Int) -> Unit,
     onFavoriteToggle: () -> Unit,
-    onAddToPlaylistClick: () -> Unit
+    onAddToPlaylistClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onLyricsClick: () -> Unit = {}
 ) {
     var showLyrics by remember { mutableStateOf(false) }
 
@@ -449,7 +474,12 @@ fun FullPlayerScreen(
                 Row {
                     // Lyrics Toggle Button
                     IconButton(
-                        onClick = { showLyrics = !showLyrics },
+                        onClick = {
+                            showLyrics = !showLyrics
+                            if (showLyrics) {
+                                onLyricsClick()
+                            }
+                        },
                         modifier = Modifier
                             .background(
                                 if (showLyrics) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
@@ -482,17 +512,8 @@ fun FullPlayerScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     // Share Button
-                    val context = androidx.compose.ui.platform.LocalContext.current
                     IconButton(
-                        onClick = {
-                            val shareIntent = android.content.Intent().apply {
-                                action = android.content.Intent.ACTION_SEND
-                                type = "text/plain"
-                                putExtra(android.content.Intent.EXTRA_SUBJECT, "Compartiendo canción en Auralis")
-                                putExtra(android.content.Intent.EXTRA_TEXT, "🎵 ¡Escuchá esta canción en Auralis! 🎵\nTítulo: ${song.title}\nArtista: ${song.artist}\nÁlbum: ${song.album}\n¡Disfrutá la música local!")
-                            }
-                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Compartir canción"))
-                        },
+                        onClick = onShareClick,
                         modifier = Modifier.testTag("player_share_song_btn")
                     ) {
                         Icon(

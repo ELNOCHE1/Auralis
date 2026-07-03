@@ -12,6 +12,7 @@ class MusicRepository(private val musicDao: MusicDao) {
     val favoriteSongs: Flow<List<SongEntity>> = musicDao.getFavoriteSongs()
     val allPlaylists: Flow<List<PlaylistEntity>> = musicDao.getAllPlaylists()
     val allListeningStats: Flow<List<ListeningStatEntity>> = musicDao.getAllListeningStats()
+    val allListeningHistory: Flow<List<ListeningHistoryEntity>> = musicDao.getAllListeningHistory()
     val playlistsWithSongs: Flow<List<PlaylistWithSongs>> = musicDao.getAllPlaylistsWithSongs()
 
     fun searchSongs(query: String): Flow<List<SongEntity>> {
@@ -44,6 +45,10 @@ class MusicRepository(private val musicDao: MusicDao) {
 
     suspend fun recordPlayback(songId: String, durationSeconds: Int) {
         musicDao.incrementPlayStat(songId, durationSeconds)
+    }
+
+    suspend fun recordListeningHistory(dateString: String) {
+        musicDao.insertListeningHistory(ListeningHistoryEntity(dateString))
     }
 
     suspend fun addSong(song: SongEntity) {

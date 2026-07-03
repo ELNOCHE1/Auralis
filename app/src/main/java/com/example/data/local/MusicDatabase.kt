@@ -61,6 +61,12 @@ data class ListeningStatEntity(
     val lastPlayed: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "listening_history")
+data class ListeningHistoryEntity(
+    @PrimaryKey val dateString: String, // Format: "yyyy-MM-dd"
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 // --- REVIEWS & RELATION MODELS ---
 
 data class PlaylistWithSongs(
@@ -166,6 +172,13 @@ interface MusicDao {
             )
         }
     }
+
+    // Listening History queries
+    @Query("SELECT * FROM listening_history ORDER BY dateString DESC")
+    fun getAllListeningHistory(): Flow<List<ListeningHistoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertListeningHistory(history: ListeningHistoryEntity)
 }
 
 // --- DATABASE ---
@@ -175,9 +188,10 @@ interface MusicDao {
         SongEntity::class,
         PlaylistEntity::class,
         PlaylistSongCrossRef::class,
-        ListeningStatEntity::class
+        ListeningStatEntity::class,
+        ListeningHistoryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
