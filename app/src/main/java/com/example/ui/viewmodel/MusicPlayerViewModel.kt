@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.MusicRepository
+import com.example.data.FirebaseSyncManager
 import com.example.data.local.MusicDatabase
 import com.example.data.local.PlaylistEntity
 import com.example.data.local.SongEntity
@@ -43,6 +44,7 @@ data class Achievement(
 class MusicPlayerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: MusicRepository
+    val firebaseSyncManager: FirebaseSyncManager
     private var playbackJob: Job? = null
     private var mediaPlayer: android.media.MediaPlayer? = null
 
@@ -56,6 +58,7 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     init {
         val database = MusicDatabase.getDatabase(application)
         repository = MusicRepository(database.musicDao())
+        firebaseSyncManager = FirebaseSyncManager(application, repository)
 
         viewModelScope.launch {
             repository.clearMockSongs()
@@ -443,6 +446,7 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
                 repository.recordListeningHistory(todayStr)
+                firebaseSyncManager.pushListeningHistory()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -576,12 +580,18 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         val newVal = _sharesCount.value + 1
         _sharesCount.value = newVal
         prefs.edit().putInt("shares_count", newVal).apply()
+        viewModelScope.launch {
+            firebaseSyncManager.pushAchievementsState(newVal, equalizerModified.value, lyricsViewed.value)
+        }
     }
 
     fun recordEqualizerModified() {
         if (!_equalizerModified.value) {
             _equalizerModified.value = true
             prefs.edit().putBoolean("equalizer_modified", true).apply()
+            viewModelScope.launch {
+                firebaseSyncManager.pushAchievementsState(sharesCount.value, true, lyricsViewed.value)
+            }
         }
     }
 
@@ -589,6 +599,9 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         if (!_lyricsViewed.value) {
             _lyricsViewed.value = true
             prefs.edit().putBoolean("lyrics_viewed", true).apply()
+            viewModelScope.launch {
+                firebaseSyncManager.pushAchievementsState(sharesCount.value, equalizerModified.value, true)
+            }
         }
     }
 
@@ -599,6 +612,11 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
             val msg = "Playlist creada: $name"
             _toastMessage.emit(msg)
             _notificationMessage.value = msg
+            try {
+                firebaseSyncManager.pushPlaylistsToFirestore()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -609,6 +627,11 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
             val msg = if (playlist != null) "Playlist eliminada: ${playlist.name}" else "Playlist eliminada"
             _toastMessage.emit(msg)
             _notificationMessage.value = msg
+            try {
+                firebaseSyncManager.pushPlaylistsToFirestore()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -624,6 +647,11 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
             }
             _toastMessage.emit(msg)
             _notificationMessage.value = msg
+            try {
+                firebaseSyncManager.pushPlaylistsToFirestore()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -639,6 +667,11 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
             }
             _toastMessage.emit(msg)
             _notificationMessage.value = msg
+            try {
+                firebaseSyncManager.pushPlaylistsToFirestore()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -746,16 +779,16 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     // --- Authentication State ---
-    private val _isLoggedIn = MutableStateFlow(false)
+    private val _isLoggedIn = MutableStateFlow(prefs.getBoolean("auth_is_logged_in", false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
-    private val _userCustomName = MutableStateFlow("")
+    private val _userCustomName = MutableStateFlow(prefs.getString("auth_user_custom_name", "") ?: "")
     val userCustomName: StateFlow<String> = _userCustomName.asStateFlow()
 
-    private val _userEmailOrPhone = MutableStateFlow("")
+    private val _userEmailOrPhone = MutableStateFlow(prefs.getString("auth_user_email_or_phone", "") ?: "")
     val userEmailOrPhone: StateFlow<String> = _userEmailOrPhone.asStateFlow()
 
-    private val _loginMethod = MutableStateFlow("") // "Gmail" or "Phone"
+    private val _loginMethod = MutableStateFlow(prefs.getString("auth_login_method", "") ?: "") // "Gmail", "Phone", "Google"
     val loginMethod: StateFlow<String> = _loginMethod.asStateFlow()
 
     private val _showLoginRequiredDialog = MutableStateFlow(false)
@@ -779,8 +812,25 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         _loginMethod.value = method
         _isLoggedIn.value = true
         _showLoginRequiredDialog.value = false
+        
+        // Save to SharedPreferences
+        prefs.edit().apply {
+            putBoolean("auth_is_logged_in", true)
+            putString("auth_user_custom_name", customName)
+            putString("auth_user_email_or_phone", emailOrPhone)
+            putString("auth_login_method", method)
+            apply()
+        }
+
         viewModelScope.launch {
             _toastMessage.emit("¡Bienvenido, $customName!")
+            try {
+                firebaseSyncManager.syncProfile(customName, emailOrPhone, method)
+                firebaseSyncManager.pullAllData(prefs)
+                firebaseSyncManager.pushAllData(sharesCount.value, equalizerModified.value, lyricsViewed.value)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         onLoginSuccessAction?.invoke()
         onLoginSuccessAction = null
@@ -792,6 +842,22 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         _userEmailOrPhone.value = ""
         _loginMethod.value = ""
         _isLoggedIn.value = false
+        
+        // Clear from SharedPreferences
+        prefs.edit().apply {
+            putBoolean("auth_is_logged_in", false)
+            putString("auth_user_custom_name", "")
+            putString("auth_user_email_or_phone", "")
+            putString("auth_login_method", "")
+            apply()
+        }
+
+        try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         viewModelScope.launch {
             _toastMessage.emit("Sesión cerrada. ¡Hasta pronto, $prevName!")
         }

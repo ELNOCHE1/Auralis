@@ -21,7 +21,9 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.*
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
@@ -64,6 +66,7 @@ fun HomeScreen(
         "¡Hola! ¿Qué escuchamos hoy?"
     }
 
+    val scope = rememberCoroutineScope()
     var showImportDialog by remember { mutableStateOf(false) }
     var importUri by remember { mutableStateOf<Uri?>(null) }
     var importTitle by remember { mutableStateOf("") }
@@ -73,6 +76,8 @@ fun HomeScreen(
     var importLyrics by remember { mutableStateOf("") }
     var importArtworkUrl by remember { mutableStateOf("bg_retro") }
     var importDuration by remember { mutableStateOf(180) }
+    var isAiLoading by remember { mutableStateOf(false) }
+    var aiMessage by remember { mutableStateOf("") }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -87,15 +92,32 @@ fun HomeScreen(
                 e.printStackTrace()
             }
             
+            var filename = "Canción Local"
+            try {
+                val cursor = context.contentResolver.query(it, null, null, null, null)
+                cursor?.use { c ->
+                    if (c.moveToFirst()) {
+                        val displayNameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (displayNameIdx != -1) {
+                            val rawFilename = c.getString(displayNameIdx)
+                            if (!rawFilename.isNullOrBlank()) {
+                                filename = rawFilename.substringBeforeLast(".")
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
             val retriever = MediaMetadataRetriever()
-            var title = "Canción Local"
+            var title = filename
             var artist = "Artista Desconocido"
             var album = "Archivo Local"
             var genre = "Local"
             var duration = 180
             try {
                 retriever.setDataSource(context, it)
-                title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: "Canción Local"
                 artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: "Artista Desconocido"
                 album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: "Archivo Local"
                 genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE) ?: "Local"
@@ -105,16 +127,6 @@ fun HomeScreen(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                val cursor = context.contentResolver.query(it, null, null, null, null)
-                cursor?.use { c ->
-                    if (c.moveToFirst()) {
-                        val displayNameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        if (displayNameIdx != -1) {
-                            val filename = c.getString(displayNameIdx)
-                            title = filename?.substringBeforeLast(".") ?: "Canción Local"
-                        }
-                    }
-                }
             } finally {
                 try { retriever.release() } catch (e: Exception) {}
             }
@@ -134,39 +146,59 @@ fun HomeScreen(
                 "space", "ambient" -> "bg_space"
                 else -> "bg_retro"
             }
+            importLyrics = "🎵 [Buscando letra y autor con IA...]"
             
-            importLyrics = """
-                🎵 [Intro Instrumental]
-                
-                [Estrofa 1]
-                Escuchando esta melodía de $artist...
-                El viento sopla en silencio,
-                mientras suena la canción en mi rincón.
-                $title es el pulso de este momento.
-                
-                [Coro]
-                Oh, $title nos hace soñar,
-                deja que el ritmo te lleve hoy.
-                Bajo las estrellas vamos a cantar,
-                con Auralis, directo al corazón.
-                
-                [Estrofa 2]
-                El camino se llena de color,
-                la música borra la oscuridad.
-                $artist le pone todo el alma y valor,
-                viviendo cada nota con libertad.
-                
-                [Coro]
-                Oh, $title nos hace soñar,
-                deja que el ritmo te lleve hoy.
-                Bajo las estrellas vamos a cantar,
-                con Auralis, directo al corazón.
-                
-                [Outro]
-                Sigue sonando... $title...
-                Conectando almas en Auralis Connect.
-                🎵 [Fin de la canción]
-            """.trimIndent()
+            isAiLoading = true
+            aiMessage = "La IA de Auralis está analizando \"$filename\"..."
+            
+            scope.launch {
+                try {
+                    val result = com.example.data.GeminiService.getLyricsAndArtist(filename)
+                    if (result != null) {
+                        importArtist = result.artist
+                        importLyrics = result.lyrics
+                        importAlbum = result.album
+                        importGenre = result.genre
+                        importArtworkUrl = when (result.genre.lowercase()) {
+                            "retro", "synthwave" -> "bg_synthwave"
+                            "acoustic", "folk", "acoustic guitar" -> "bg_acoustic"
+                            "lofi", "chill" -> "bg_lofi"
+                            "rock", "metal" -> "bg_rock"
+                            "space", "ambient" -> "bg_space"
+                            else -> "bg_retro"
+                        }
+                        aiMessage = "¡IA completó la información con éxito!"
+                    } else {
+                        aiMessage = "No se pudo obtener datos de la IA. Usando valores predeterminados."
+                        importLyrics = """
+                            🎵 [Intro Instrumental]
+                            
+                            [Estrofa 1]
+                            Escuchando esta melodía de $artist...
+                            El viento sopla en silencio,
+                            mientras suena la canción en mi rincón.
+                            $title es el pulso de este momento.
+                            
+                            [Coro]
+                            Oh, $title nos hace soñar,
+                            deja que el ritmo te lleve hoy.
+                            Bajo las estrellas vamos a cantar,
+                            con Auralis, directo al corazón.
+                            
+                            [Outro]
+                            Sigue sonando... $title...
+                            Conectando almas en Auralis Connect.
+                            🎵 [Fin de la canción]
+                        """.trimIndent()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    aiMessage = "Error con la IA: ${e.message}"
+                    importLyrics = "🎵 [Error al generar la letra]"
+                } finally {
+                    isAiLoading = false
+                }
+            }
             
             showImportDialog = true
         }
@@ -392,6 +424,42 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
+                    if (isAiLoading || aiMessage.isNotBlank()) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isAiLoading) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                if (isAiLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = "IA",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Text(
+                                    text = aiMessage,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = importTitle,
                         onValueChange = { importTitle = it },
@@ -399,6 +467,55 @@ fun HomeScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("import_title_field")
                     )
+
+                    Button(
+                        onClick = {
+                            isAiLoading = true
+                            aiMessage = "La IA de Auralis está analizando \"$importTitle\"..."
+                            scope.launch {
+                                try {
+                                    val result = com.example.data.GeminiService.getLyricsAndArtist(importTitle)
+                                    if (result != null) {
+                                        importArtist = result.artist
+                                        importLyrics = result.lyrics
+                                        importAlbum = result.album
+                                        importGenre = result.genre
+                                        importArtworkUrl = when (result.genre.lowercase()) {
+                                            "retro", "synthwave" -> "bg_synthwave"
+                                            "acoustic", "folk", "acoustic guitar" -> "bg_acoustic"
+                                            "lofi", "chill" -> "bg_lofi"
+                                            "rock", "metal" -> "bg_rock"
+                                            "space", "ambient" -> "bg_space"
+                                            else -> "bg_retro"
+                                        }
+                                        aiMessage = "¡Información actualizada por la IA!"
+                                    } else {
+                                        aiMessage = "No se pudo obtener datos de la IA."
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    aiMessage = "Error: ${e.message}"
+                                } finally {
+                                    isAiLoading = false
+                                }
+                            }
+                        },
+                        enabled = !isAiLoading && importTitle.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("ai_suggest_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "IA",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sugerir Letra y Autor con IA ✨", fontSize = 12.sp)
+                    }
 
                     OutlinedTextField(
                         value = importArtist,
